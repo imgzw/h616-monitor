@@ -60,10 +60,10 @@ setup_app() {
 
     mkdir -p "$INSTALL_DIR"/{backend,frontend,config,recordings}
     mkdir -p "$RECORDINGS_DIR"
+    mkdir -p "$INSTALL_DIR/backend/.thumbnails"
 
-    cp -r "$CURRENT_DIR/backend/"* "$INSTALL_DIR/backend/"
-    cp -r "$CURRENT_DIR/config/"* "$INSTALL_DIR/config/"
-    cp "$CURRENT_DIR/deploy/go2rtc.yaml" "$INSTALL_DIR/config/go2rtc.yaml" 2>/dev/null || true
+    rsync -a --exclude='venv' --exclude='__pycache__' --exclude='.DS_Store' "$CURRENT_DIR/backend/" "$INSTALL_DIR/backend/"
+    cp "$CURRENT_DIR/config/go2rtc.yaml" "$INSTALL_DIR/config/go2rtc.yaml"
 
     info "Creating Python virtual environment..."
     python3 -m venv "$INSTALL_DIR/backend/venv"
