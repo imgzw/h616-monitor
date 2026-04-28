@@ -51,6 +51,8 @@ install_nodejs() {
 
 install_go2rtc() {
     info "Installing go2rtc..."
+    systemctl stop go2rtc 2>/dev/null || true
+
     ARCH=$(dpkg --print-architecture)
     case "$ARCH" in
         armhf)   GO2RTC_ARCH="armv6" ;;
