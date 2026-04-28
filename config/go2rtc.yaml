@@ -1,6 +1,7 @@
 streams:
   camera:
     - v4l2:device?video=/dev/video1&input_format=mjpeg&video_size=1280x720&framerate=30
+    - ffmpeg:camera#video=h264#hardware=v4l2m2m
   camera_low:
     - ffmpeg:camera#video=h264#hardware=v4l2m2m#video_bitrate=1500
 
