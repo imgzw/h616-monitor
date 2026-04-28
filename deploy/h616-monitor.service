@@ -15,14 +15,12 @@ RestartSec=3
 StartLimitIntervalSec=60
 StartLimitBurst=5
 
-WatchdogSec=30
-
 NoNewPrivileges=true
 ProtectSystem=strict
 ReadWritePaths=/opt/h616-monitor/recordings /opt/h616-monitor/backend/.thumbnails
 PrivateTmp=true
 
-DeviceAllow=/dev/video0 rw
+DeviceAllow=/dev/video1 rw
 
 MemoryMax=256M
 MemoryHigh=200M
