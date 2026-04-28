@@ -1,9 +1,8 @@
 streams:
   camera:
-    - "video /dev/video1"
-    - "ffmpeg:camera#video=h264_v4l2m2m"
+    - v4l2:device?video=/dev/video1&input_format=mjpeg&video_size=1280x720&framerate=30
   camera_low:
-    - "ffmpeg:camera#video=h264_v4l2m2m#video_bitrate=1500"
+    - ffmpeg:camera#video=h264#hardware=v4l2m2m#video_bitrate=1500
 
 api:
   listen: ":1984"
