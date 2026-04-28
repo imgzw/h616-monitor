@@ -73,15 +73,17 @@ install_go2rtc() {
         | head -1 | cut -d'"' -f4)
 
     if [ -z "$latest_url" ]; then
-        warn "Could not determine latest go2rtc release, trying direct URL..."
+        warn "Could not determine latest go2rtc release from GitHub API, trying direct URL..."
         latest_url="https://github.com/AlexxIT/go2rtc/releases/latest/download/go2rtc_linux_${GO2RTC_ARCH}"
+        wanted_version="unknown"
+    else
+        # Extract version from URL tag: .../download/v1.9.14/go2rtc_linux_arm64
+        wanted_version=$(echo "$latest_url" | sed 's|.*/\([^/]*\)/go2rtc_linux.*|\1|; s|^v||')
     fi
 
-    wanted_version=$(basename "$latest_url" | sed 's/go2rtc_//; s/_linux.*//')
-
     if [ "$FORCE_FLAG" -eq 0 ] && [ -x /usr/local/bin/go2rtc ]; then
-        current_version=$(go2rtc -v 2>&1 | head -1 || echo "unknown")
-        if echo "$current_version" | grep -q "$wanted_version"; then
+        current_version=$(go2rtc -v 2>&1 | head -1 | awk '{print $3}' || echo "unknown")
+        if [ "$current_version" = "$wanted_version" ]; then
             info "go2rtc ${current_version} already installed, skipping. Use --force to reinstall."
             return 0
         fi
@@ -91,7 +93,7 @@ install_go2rtc() {
     fi
 
     systemctl stop go2rtc 2>/dev/null || true
-    wget -qO /usr/local/bin/go2rtc "$latest_url"
+    wget -T 120 -qO /usr/local/bin/go2rtc "$latest_url"
     chmod +x /usr/local/bin/go2rtc
     info "go2rtc installed: $(go2rtc -v 2>&1 | head -1 || echo 'version check failed')"
 }
