@@ -25,8 +25,28 @@ install_system_deps() {
         python3 python3-pip python3-venv \
         ffmpeg v4l-utils \
         nginx \
-        curl wget
+        curl wget rsync
     info "System dependencies installed."
+}
+
+install_nodejs() {
+    if command -v node &>/dev/null && command -v npm &>/dev/null; then
+        info "Node.js $(node -v) already installed, skipping."
+        return 0
+    fi
+
+    info "Installing Node.js (LTS) for frontend build..."
+    ARCH=$(dpkg --print-architecture)
+    case "$ARCH" in
+        arm64|aarch64) NODE_ARCH="arm64" ;;
+        armhf)        NODE_ARCH="armv7l" ;;
+        *)             NODE_ARCH="x64" ;;
+    esac
+
+    NODE_MAJOR=20
+    curl -fsSL https://deb.nodesource.com/setup_${NODE_MAJOR}.x | bash -
+    apt-get install -y -qq nodejs
+    info "Node.js $(node -v) installed."
 }
 
 install_go2rtc() {
@@ -95,20 +115,14 @@ setup_nginx() {
 }
 
 build_frontend() {
-    info "Building frontend..."
-    if command -v node &>/dev/null && command -v npm &>/dev/null; then
-        cd "$CURRENT_DIR/frontend"
-        npm ci --ignore-scripts
-        npm run build
-        mkdir -p "$INSTALL_DIR/frontend"
-        cp -r dist/* "$INSTALL_DIR/frontend/dist/" 2>/dev/null || true
-        chown -R h616-monitor:h616-monitor "$INSTALL_DIR/frontend"
-        info "Frontend built and installed."
-    else
-        warn "Node.js not found. Build frontend manually on a dev machine:"
-        warn "  cd frontend && npm ci && npm run build"
-        warn "Then copy dist/ to $INSTALL_DIR/frontend/dist/"
-    fi
+    info "Building frontend on device..."
+    cd "$CURRENT_DIR/frontend"
+    npm ci --ignore-scripts
+    npm run build
+    mkdir -p "$INSTALL_DIR/frontend/dist"
+    cp -r dist/* "$INSTALL_DIR/frontend/dist/"
+    chown -R h616-monitor:h616-monitor "$INSTALL_DIR/frontend"
+    info "Frontend built and installed."
 }
 
 start_services() {
@@ -133,6 +147,7 @@ start_services() {
 main() {
     check_root
     install_system_deps
+    install_nodejs
     install_go2rtc
     setup_app
     setup_systemd
