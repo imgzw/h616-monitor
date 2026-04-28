@@ -1,8 +1,9 @@
 streams:
   camera:
     - "video /dev/video0"
-  camera_low:
     - "ffmpeg:camera#video=h264_v4l2m2m"
+  camera_low:
+    - "ffmpeg:camera#video=h264_v4l2m2m#video_bitrate=1500"
 
 api:
   listen: ":1984"
