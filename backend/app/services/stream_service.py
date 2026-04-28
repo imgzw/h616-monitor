@@ -26,44 +26,35 @@ class StreamService:
             return False
 
     async def get_stream_url(self, protocol: str = "webrtc") -> str:
-        host = settings.go2rtc_host
-        port = settings.go2rtc_port
         name = settings.camera_name
-
-        match protocol:
-            case "webrtc":
-                return f"{host}:{port}/api/webrtc?src={name}"
-            case "mjpeg":
-                return f"http://{host}:{port}/api/stream.mjpeg?src={name}"
-            case "hls":
-                return f"http://{host}:{port}/api/stream.hls?src={name}"
-            case _:
-                return f"{host}:{port}/api/webrtc?src={name}"
+        return _stream_url(name, protocol)
 
     async def get_low_bandwidth_url(self, protocol: str = "webrtc") -> dict:
         if not transcode_service.available:
             return {"available": False, "url": "", "protocol": protocol}
 
         stream_name = settings.low_bandwidth_stream_name
-        host = settings.go2rtc_host
-        port = settings.go2rtc_port
-
-        match protocol:
-            case "webrtc":
-                url = f"{host}:{port}/api/webrtc?src={stream_name}"
-            case "hls":
-                url = f"http://{host}:{port}/api/stream.hls?src={stream_name}"
-            case _:
-                url = f"{host}:{port}/api/webrtc?src={stream_name}"
 
         return {
             "available": True,
-            "url": url,
+            "url": _stream_url(stream_name, protocol),
             "protocol": protocol,
             "stream_name": stream_name,
             "encoder": transcode_service.encoder,
             "hw_accelerated": transcode_service.hw_accelerated,
         }
+
+
+def _stream_url(name: str, protocol: str) -> str:
+    match protocol:
+        case "webrtc":
+            return f"/api/webrtc?src={name}"
+        case "mjpeg":
+            return f"/api/stream.mjpeg?src={name}"
+        case "hls":
+            return f"/api/stream.hls?src={name}"
+        case _:
+            return f"/api/webrtc?src={name}"
 
 
 stream_service = StreamService()

@@ -26,7 +26,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { VideoCamera } from '@element-plus/icons-vue'
-import { getGo2rtcConfig } from '../api'
+import { getGo2rtcConfig, getLowBandwidthUrl } from '../api'
 
 const props = defineProps<{
   streamName?: string
@@ -52,14 +52,23 @@ async function connect() {
     const { data: config } = await getGo2rtcConfig()
     let name = props.streamName || config.camera_name
 
-    if (props.lowBandwidth && config.low_bandwidth_url?.available) {
-      name = config.low_bandwidth_url.stream_name || 'camera_low'
-      encoderInfo.value = config.low_bandwidth_url.hw_accelerated ? 'V4L2 M2M' : 'x264'
+    if (props.lowBandwidth) {
+      try {
+        const { data: lb } = await getLowBandwidthUrl('webrtc')
+        if (lb.available) {
+          name = lb.stream_name
+          encoderInfo.value = lb.hw_accelerated ? 'V4L2 M2M' : 'x264'
+        } else {
+          encoderInfo.value = ''
+        }
+      } catch {
+        encoderInfo.value = ''
+      }
     } else {
       encoderInfo.value = ''
     }
 
-    const url = `http://${config.host}:${config.port}/api/webrtc?src=${name}`
+    const url = `/api/webrtc?src=${name}`
 
     pc = new RTCPeerConnection({ iceServers: [] })
     pc.addTransceiver('video', { direction: 'recvonly' })
