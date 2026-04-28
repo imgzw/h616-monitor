@@ -2,6 +2,15 @@ import axios from 'axios'
 
 const api = axios.create({ baseURL: '/api', timeout: 10000 })
 
+export interface StorageInfo {
+  total_bytes: number
+  used_bytes: number
+  free_bytes: number
+  usage_percent: number
+  recordings_bytes: number
+  recordings_count: number
+}
+
 export interface SystemStatus {
   stream_active: boolean
   recording: {
@@ -10,14 +19,7 @@ export interface SystemStatus {
     segment_duration: number
     pid: number | null
   }
-  storage: {
-    total_bytes: number
-    used_bytes: number
-    free_bytes: number
-    usage_percent: number
-    recordings_bytes: number
-    recordings_count: number
-  }
+  storage: StorageInfo
   cpu_temp: {
     temp_c: number
     high_threshold: number
