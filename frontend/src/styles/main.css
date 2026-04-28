@@ -1,0 +1,64 @@
+:root {
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-tertiary: #0f3460;
+  --accent: #e94560;
+  --accent-hover: #ff6b81;
+  --text-primary: #e8e8e8;
+  --text-secondary: #a0a0b0;
+  --success: #2ecc71;
+  --warning: #f39c12;
+  --danger: #e94560;
+  --border: #2a2a4a;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body, #app {
+  height: 100%;
+  width: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+html.dark {
+  --el-bg-color: var(--bg-secondary);
+  --el-bg-color-overlay: var(--bg-tertiary);
+  --el-bg-color-page: var(--bg-primary);
+  --el-border-color: var(--border);
+  --el-border-color-light: var(--border);
+  --el-text-color-primary: var(--text-primary);
+  --el-text-color-regular: var(--text-secondary);
+  --el-fill-color-blank: var(--bg-secondary);
+}
+
+.el-menu {
+  border-right: none !important;
+}
+
+.el-card {
+  --el-card-bg-color: var(--bg-secondary);
+  border-color: var(--border);
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 8px;
+}
+.status-dot.active { background: var(--success); box-shadow: 0 0 8px var(--success); }
+.status-dot.recording { background: var(--accent); animation: pulse 1.5s ease-in-out infinite; }
+.status-dot.inactive { background: #555; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.slide-fade-enter-active { transition: all 0.3s ease; }
+.slide-fade-leave-active { transition: all 0.2s ease; }
+.slide-fade-enter-from { transform: translateX(20px); opacity: 0; }
+.slide-fade-leave-to { transform: translateX(-20px); opacity: 0; }

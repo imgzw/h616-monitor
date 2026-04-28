@@ -1,0 +1,16 @@
+streams:
+  camera:
+    - "video /dev/video0"
+  camera_low:
+    - "ffmpeg:camera#video=h264_v4l2m2m"
+
+api:
+  listen: ":1984"
+
+webrtc:
+  listen: ":8555"
+  candidates:
+    - stun:8555
+
+log:
+  level: warn

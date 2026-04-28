@@ -1,0 +1,30 @@
+[Unit]
+Description=H616 Monitor Backend (FastAPI)
+After=network.target go2rtc.service
+Wants=go2rtc.service
+
+[Service]
+Type=simple
+User=h616-monitor
+Group=h616-monitor
+WorkingDirectory=/opt/h616-monitor/backend
+EnvironmentFile=/opt/h616-monitor/backend/.env
+ExecStart=/opt/h616-monitor/backend/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
+Restart=always
+RestartSec=3
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+WatchdogSec=30
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/h616-monitor/recordings /opt/h616-monitor/backend/.thumbnails
+PrivateTmp=true
+
+MemoryMax=256M
+MemoryHigh=200M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target
