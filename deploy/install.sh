@@ -101,6 +101,7 @@ setup_app() {
     step "Setting up backend"
 
     useradd -r -s /bin/false h616-monitor 2>/dev/null || true
+    usermod -aG video h616-monitor 2>/dev/null || true
 
     mkdir -p "$INSTALL_DIR"/{backend,frontend,config,recordings}
     mkdir -p "$RECORDINGS_DIR"

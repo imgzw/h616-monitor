@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class CameraControlService:
-    """Controls V4L2 camera parameters (zoom, brightness, contrast, etc.)."""
+    """V4L2 camera parameter control with TTL cache."""
 
     def __init__(self):
         self._device = settings.camera_device
@@ -16,14 +16,25 @@ class CameraControlService:
         self._controls_ts: float = 0.0
         self._cache_ttl: float = 5.0
 
+    async def _run_v4l2(self, *args: str) -> tuple[str, str, int]:
+        cmd = [settings.v4l2_ctl_path, "--device", self._device, *args]
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await proc.communicate()
+            return stdout.decode(errors="replace"), stderr.decode(errors="replace"), proc.returncode or 0
+        except Exception:
+            logger.exception("v4l2-ctl failed")
+            return "", "", 1
+
     async def get_info(self) -> dict:
-        cmd = [settings.v4l2_ctl_path, "--device", self._device, "--info"]
-        proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        stdout, _ = await proc.communicate()
+        stdout, stderr, rc = await self._run_v4l2("--info")
         info: dict = {}
-        for line in stdout.decode(errors="replace").splitlines():
+        combined = stdout + "\n" + stderr
+        for line in combined.splitlines():
             line = line.strip()
             if line.startswith("Card type"):
                 info["card"] = line.split(":", 1)[1].strip()
@@ -32,50 +43,32 @@ class CameraControlService:
             elif line.startswith("Bus info"):
                 info["bus_info"] = line.split(":", 1)[1].strip()
         info["device"] = self._device
+        if rc != 0:
+            logger.warning("v4l2-ctl --info returned rc=%d: %s", rc, stderr.strip()[:200])
         return info
 
     async def get_resolution(self) -> str:
-        """Get current video resolution from V4L2."""
-        cmd = [
-            settings.v4l2_ctl_path,
-            "--device", self._device,
-            "--get-fmt-video",
-        ]
-        proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        stdout, _ = await proc.communicate()
-        if proc.returncode != 0:
+        stdout, stderr, rc = await self._run_v4l2("--get-fmt-video")
+        if rc != 0:
             return ""
-        output = stdout.decode(errors="replace")
-        # Parse: "Width/Height      : 1920/1080"
-        for line in output.splitlines():
+        combined = stdout + "\n" + stderr
+        for line in combined.splitlines():
             line = line.strip()
-            if "Width/Height" in line or "width" in line.lower() and "height" in line.lower():
+            if "Width/Height" in line or ("width" in line.lower() and "height" in line.lower()):
                 parts = line.split(":")
                 if len(parts) >= 2:
-                    res = parts[1].strip()
-                    # Normalize "1920/1080" → "1920x1080"
-                    return res.replace("/", "x")
+                    res = parts[1].strip().replace("/", "x")
+                    return res
         return ""
 
     async def get_formats(self) -> list[str]:
-        """List supported pixel formats from V4L2."""
-        cmd = [
-            settings.v4l2_ctl_path,
-            "--device", self._device,
-            "--list-formats",
-        ]
-        proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        stdout, _ = await proc.communicate()
-        if proc.returncode != 0:
+        stdout, stderr, rc = await self._run_v4l2("--list-formats")
+        if rc != 0:
             return []
+        combined = stdout + "\n" + stderr
         formats: list[str] = []
-        for line in stdout.decode(errors="replace").splitlines():
+        for line in combined.splitlines():
             line = line.strip()
-            # Parse lines like: [0]: 'YUYV' (YUYV 4:2:2)
             if line.startswith("["):
                 try:
                     start = line.index("'") + 1
@@ -86,43 +79,28 @@ class CameraControlService:
         return formats
 
     async def list_controls(self) -> list[dict]:
-        """List V4L2 controls with TTL cache to avoid repeated process spawns."""
         now = time.monotonic()
         if self._controls_cache is not None and (now - self._controls_ts) < self._cache_ttl:
             return self._controls_cache
 
-        cmd = [
-            settings.v4l2_ctl_path,
-            "--device", self._device,
-            "--list-ctrls",
-        ]
-        proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        stdout, _ = await proc.communicate()
-        result = self._parse_controls(stdout.decode(errors="replace"))
+        stdout, stderr, rc = await self._run_v4l2("--list-ctrls")
+        combined = stdout + "\n" + stderr
+        if rc != 0:
+            logger.warning("v4l2-ctl --list-ctrls returned rc=%d: %s", rc, stderr.strip()[:200])
+        result = self._parse_controls(combined)
         self._controls_cache = result
         self._controls_ts = now
         return result
 
     def invalidate_cache(self) -> None:
-        """Force refresh of controls cache on next list_controls() call."""
         self._controls_cache = None
         self._controls_ts = 0.0
 
     async def get_control(self, name: str) -> dict | None:
-        cmd = [
-            settings.v4l2_ctl_path,
-            "--device", self._device,
-            "--get-ctrl", name,
-        ]
-        proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
+        stdout, stderr, rc = await self._run_v4l2("--get-ctrl", name)
+        if rc != 0:
             return None
-        value = stdout.decode(errors="replace").strip()
+        value = stdout.strip() or stderr.strip()
         controls = await self.list_controls()
         for ctrl in controls:
             if ctrl["name"] == name:
@@ -134,17 +112,9 @@ class CameraControlService:
         return None
 
     async def set_control(self, name: str, value: int) -> bool:
-        cmd = [
-            settings.v4l2_ctl_path,
-            "--device", self._device,
-            "--set-ctrl", f"{name}={value}",
-        ]
-        proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-        )
-        await proc.communicate()
-        if proc.returncode != 0:
-            logger.error("Failed to set %s=%d", name, value)
+        stdout, stderr, rc = await self._run_v4l2("--set-ctrl", f"{name}={value}")
+        if rc != 0:
+            logger.error("Failed to set %s=%d: %s", name, value, stderr.strip()[:200])
             return False
         logger.info("Set %s=%d", name, value)
         self.invalidate_cache()

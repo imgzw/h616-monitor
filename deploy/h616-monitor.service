@@ -22,6 +22,8 @@ ProtectSystem=strict
 ReadWritePaths=/opt/h616-monitor/recordings /opt/h616-monitor/backend/.thumbnails
 PrivateTmp=true
 
+DeviceAllow=/dev/video0 rw
+
 MemoryMax=256M
 MemoryHigh=200M
 CPUQuota=50%
