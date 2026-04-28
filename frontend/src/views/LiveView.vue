@@ -13,13 +13,10 @@
               v-model="lowBandwidth"
               active-text="省流"
               inactive-text="高清"
-              :disabled="!transcodeAvailable"
               @change="onBandwidthChange"
             />
-            <div v-if="transcodeInfo" class="encoder-info">
-              <span v-if="transcodeInfo.hw_accelerated" class="hw-badge">硬解 V4L2</span>
-              <span v-else-if="transcodeInfo.available" class="sw-badge">软解 x264</span>
-              <span v-else class="na-badge">不可用</span>
+            <div v-if="lowBandwidth" class="encoder-info">
+              <span class="sw-badge">MJPEG 低耗</span>
             </div>
           </div>
         </div>

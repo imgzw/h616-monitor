@@ -25,7 +25,7 @@
     <div v-if="connected" class="video-overlay-hover" @click.stop>
       <div class="overlay-status">
         <span class="status-dot active" />
-        <span>实时{{ lowBandwidth ? ' (低带宽)' : '' }} — {{ resolution }}</span>
+        <span>实时{{ lowBandwidth ? ' (省流)' : '' }} — {{ resolution }}</span>
         <span class="encoder-badge">{{ modeBadge }}</span>
       </div>
     </div>
@@ -35,7 +35,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { VideoCamera } from '@element-plus/icons-vue'
-import { getGo2rtcConfig, getLowBandwidthUrl } from '../api'
+import { getGo2rtcConfig } from '../api'
 
 const props = defineProps<{
   streamName?: string
@@ -47,12 +47,10 @@ const containerRef = ref<HTMLDivElement>()
 const connected = ref(false)
 const connecting = ref(false)
 const resolution = ref('')
-const encoderInfo = ref('')
 const mode = ref<'webrtc' | 'mjpeg'>('webrtc')
 const modeInfo = ref('')
 
 let pc: RTCPeerConnection | null = null
-let mjpegImg: HTMLImageElement | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let webrtcFailed = false
 
@@ -60,41 +58,31 @@ const mjpegUrl = computed(() => '/api/stream.mjpeg?src=camera')
 
 const modeBadge = computed(() => {
   if (mode.value === 'mjpeg') return 'MJPEG'
-  if (encoderInfo.value) return encoderInfo
   return 'WebRTC'
 })
 
 async function connect() {
   if (connecting.value) return
-  connecting.value = true
-  connected.value = false
-  modeInfo.value = ''
 
-  // If WebRTC already failed on this stream, go straight to MJPEG
+  // Low bandwidth = MJPEG mode (no H264 encoding needed)
+  if (props.lowBandwidth) {
+    connectMjpeg()
+    return
+  }
+
+  // If WebRTC already failed on this stream, fall back to MJPEG
   if (webrtcFailed) {
     connectMjpeg()
     return
   }
 
+  connecting.value = true
+  connected.value = false
+  modeInfo.value = ''
+
   try {
     const { data: config } = await getGo2rtcConfig()
-    let name = props.streamName || config.camera_name
-
-    if (props.lowBandwidth) {
-      try {
-        const { data: lb } = await getLowBandwidthUrl('webrtc')
-        if (lb.available) {
-          name = lb.stream_name
-          encoderInfo.value = lb.hw_accelerated ? 'V4L2 M2M' : 'x264'
-        } else {
-          encoderInfo.value = ''
-        }
-      } catch {
-        encoderInfo.value = ''
-      }
-    } else {
-      encoderInfo.value = ''
-    }
+    const name = props.streamName || config.camera_name
 
     const url = `/api/webrtc?src=${name}`
 
@@ -115,7 +103,6 @@ async function connect() {
       const state = pc.iceConnectionState
       if (state === 'failed' || state === 'disconnected') {
         connected.value = false
-        // WebRTC failed, mark it and fall back to MJPEG
         webrtcFailed = true
         disconnect()
         connectMjpeg()
@@ -132,7 +119,6 @@ async function connect() {
     })
 
     if (!resp.ok) {
-      // WebRTC endpoint returned error (codec mismatch, stream not found, etc.)
       webrtcFailed = true
       disconnect()
       connectMjpeg()
@@ -140,12 +126,6 @@ async function connect() {
     }
 
     const answerSdp = await resp.text()
-
-    // Check if answer is valid (go2rtc returns error SDP when codecs don't match)
-    if (answerSdp.includes('0 VIDEO') && answerSdp.includes('rtx')) {
-      // Valid video track in answer — proceed
-    }
-
     await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp })
   } catch (e) {
     console.error('WebRTC connect failed:', e)
@@ -159,10 +139,9 @@ async function connect() {
 
 function connectMjpeg() {
   mode.value = 'mjpeg'
-  modeInfo.value = 'MJPEG 模式'
+  modeInfo.value = 'MJPEG 省流模式'
   connecting.value = false
-  // The <img> tag handles MJPEG streaming natively via src binding
-  // connected will be set to true on @load event
+  connected.value = false
 }
 
 function onMjpegLoad() {
@@ -179,7 +158,6 @@ function scheduleReconnect() {
   if (reconnectTimer) clearTimeout(reconnectTimer)
   reconnectTimer = setTimeout(() => {
     disconnect()
-    // Reset webrtcFailed to try WebRTC again on reconnect
     webrtcFailed = false
     connect()
   }, 5000)
@@ -194,10 +172,6 @@ function disconnect() {
     pc.close()
     pc = null
   }
-  if (mjpegImg) {
-    mjpegImg.src = ''
-    mjpegImg = null
-  }
   connected.value = false
 }
 
@@ -209,8 +183,8 @@ function onVideoReady() {
 }
 
 watch(() => props.lowBandwidth, () => {
-  webrtcFailed = false
   disconnect()
+  webrtcFailed = false
   connect()
 })
 

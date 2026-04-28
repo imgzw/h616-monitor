@@ -3,7 +3,6 @@ import logging
 import httpx
 
 from app.config import settings
-from app.services.transcode_service import H264_STREAM_NAME, LOW_STREAM_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -32,14 +31,13 @@ class StreamService:
         name = settings.camera_name
         return _stream_url(name, protocol)
 
-    async def get_low_bandwidth_url(self, protocol: str = "webrtc") -> dict:
-        stream_name = LOW_STREAM_NAME
+    async def get_low_bandwidth_url(self, protocol: str = "mjpeg") -> dict:
         return {
             "available": True,
-            "url": _stream_url(stream_name, protocol),
-            "protocol": protocol,
-            "stream_name": stream_name,
-            "encoder": "libx264",
+            "url": "/api/stream.mjpeg?src=camera",
+            "protocol": "mjpeg",
+            "stream_name": "camera",
+            "encoder": "mjpeg",
             "hw_accelerated": False,
         }
 

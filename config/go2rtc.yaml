@@ -3,8 +3,6 @@ streams:
     - v4l2:device?video=/dev/video1&input_format=mjpeg&video_size=1280x720&framerate=15
   camera_h264:
     - "exec:ffmpeg -f v4l2 -input_format mjpeg -video_size 1280x720 -framerate 15 -i /dev/video1 -vf scale=640:360 -c:v libx264 -preset ultrafast -tune zerolatency -g 30 -b:v 800k -f h264 pipe:1"
-  camera_low:
-    - "exec:ffmpeg -f v4l2 -input_format mjpeg -video_size 1280x720 -framerate 10 -i /dev/video1 -vf scale=480:270 -c:v libx264 -preset ultrafast -tune zerolatency -g 20 -b:v 400k -f h264 pipe:1"
 
 api:
   listen: ":1984"
@@ -15,4 +13,4 @@ webrtc:
     - stun:8555
 
 log:
-  level: info
+  level: warn
