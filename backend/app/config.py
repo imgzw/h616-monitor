@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     port: int = 8000
 
     camera_device: str = "/dev/video1"
-    camera_name: str = "camera_h264"
+    camera_name: str = "camera"
 
     recordings_dir: Path = Path("/opt/h616-monitor/recordings")
     segment_duration: int = 300

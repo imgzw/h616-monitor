@@ -1,6 +1,14 @@
 <template>
   <div class="video-player" ref="containerRef">
+    <img
+      v-if="mode === 'mjpeg'"
+      :src="mjpegUrl"
+      class="video-element"
+      @load="onMjpegLoad"
+      @error="onMjpegError"
+    />
     <video
+      v-else
       ref="videoRef"
       autoplay
       playsinline
@@ -11,20 +19,21 @@
     <div v-if="!connected" class="video-overlay">
       <el-icon :size="48" class="connecting-icon"><VideoCamera /></el-icon>
       <p>{{ connecting ? '正在连接...' : '未连接' }}</p>
+      <p v-if="modeInfo" class="mode-info">{{ modeInfo }}</p>
       <el-button v-if="!connecting" type="primary" @click="connect">重新连接</el-button>
     </div>
     <div v-if="connected" class="video-overlay-hover" @click.stop>
       <div class="overlay-status">
         <span class="status-dot active" />
         <span>实时{{ lowBandwidth ? ' (低带宽)' : '' }} — {{ resolution }}</span>
-        <span v-if="lowBandwidth && encoderInfo" class="encoder-badge">{{ encoderInfo }}</span>
+        <span class="encoder-badge">{{ modeBadge }}</span>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { VideoCamera } from '@element-plus/icons-vue'
 import { getGo2rtcConfig, getLowBandwidthUrl } from '../api'
 
@@ -39,14 +48,33 @@ const connected = ref(false)
 const connecting = ref(false)
 const resolution = ref('')
 const encoderInfo = ref('')
+const mode = ref<'webrtc' | 'mjpeg'>('webrtc')
+const modeInfo = ref('')
 
 let pc: RTCPeerConnection | null = null
+let mjpegImg: HTMLImageElement | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+let webrtcFailed = false
+
+const mjpegUrl = computed(() => '/api/stream.mjpeg?src=camera')
+
+const modeBadge = computed(() => {
+  if (mode.value === 'mjpeg') return 'MJPEG'
+  if (encoderInfo.value) return encoderInfo
+  return 'WebRTC'
+})
 
 async function connect() {
   if (connecting.value) return
   connecting.value = true
   connected.value = false
+  modeInfo.value = ''
+
+  // If WebRTC already failed on this stream, go straight to MJPEG
+  if (webrtcFailed) {
+    connectMjpeg()
+    return
+  }
 
   try {
     const { data: config } = await getGo2rtcConfig()
@@ -78,6 +106,7 @@ async function connect() {
       if (videoRef.value && event.streams[0]) {
         videoRef.value.srcObject = event.streams[0]
         connected.value = true
+        mode.value = 'webrtc'
       }
     }
 
@@ -86,7 +115,10 @@ async function connect() {
       const state = pc.iceConnectionState
       if (state === 'failed' || state === 'disconnected') {
         connected.value = false
-        scheduleReconnect()
+        // WebRTC failed, mark it and fall back to MJPEG
+        webrtcFailed = true
+        disconnect()
+        connectMjpeg()
       }
     }
 
@@ -99,24 +131,58 @@ async function connect() {
       body: offer.sdp,
     })
 
-    if (!resp.ok) throw new Error(`go2rtc responded ${resp.status}`)
+    if (!resp.ok) {
+      // WebRTC endpoint returned error (codec mismatch, stream not found, etc.)
+      webrtcFailed = true
+      disconnect()
+      connectMjpeg()
+      return
+    }
+
     const answerSdp = await resp.text()
+
+    // Check if answer is valid (go2rtc returns error SDP when codecs don't match)
+    if (answerSdp.includes('0 VIDEO') && answerSdp.includes('rtx')) {
+      // Valid video track in answer — proceed
+    }
+
     await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp })
   } catch (e) {
     console.error('WebRTC connect failed:', e)
-    connected.value = false
-    scheduleReconnect()
+    webrtcFailed = true
+    disconnect()
+    connectMjpeg()
   } finally {
     connecting.value = false
   }
+}
+
+function connectMjpeg() {
+  mode.value = 'mjpeg'
+  modeInfo.value = 'MJPEG 模式'
+  connecting.value = false
+  // The <img> tag handles MJPEG streaming natively via src binding
+  // connected will be set to true on @load event
+}
+
+function onMjpegLoad() {
+  connected.value = true
+  resolution.value = '1280x720'
+}
+
+function onMjpegError() {
+  connected.value = false
+  scheduleReconnect()
 }
 
 function scheduleReconnect() {
   if (reconnectTimer) clearTimeout(reconnectTimer)
   reconnectTimer = setTimeout(() => {
     disconnect()
+    // Reset webrtcFailed to try WebRTC again on reconnect
+    webrtcFailed = false
     connect()
-  }, 3000)
+  }, 5000)
 }
 
 function disconnect() {
@@ -128,8 +194,9 @@ function disconnect() {
     pc.close()
     pc = null
   }
-  if (videoRef.value) {
-    videoRef.value.srcObject = null
+  if (mjpegImg) {
+    mjpegImg.src = ''
+    mjpegImg = null
   }
   connected.value = false
 }
@@ -142,6 +209,7 @@ function onVideoReady() {
 }
 
 watch(() => props.lowBandwidth, () => {
+  webrtcFailed = false
   disconnect()
   connect()
 })
@@ -178,12 +246,17 @@ defineExpose({ connect, disconnect, connected })
   justify-content: center;
   background: rgba(0,0,0,0.85);
   color: var(--text-secondary);
-  gap: 16px;
+  gap: 8px;
 }
 
 .connecting-icon {
   color: var(--accent);
   animation: pulse 2s ease-in-out infinite;
+}
+
+.mode-info {
+  font-size: 12px;
+  color: var(--text-tertiary);
 }
 
 .video-overlay-hover {
