@@ -3,13 +3,12 @@ import logging
 import httpx
 
 from app.config import settings
-from app.services.transcode_service import transcode_service
+from app.services.transcode_service import H264_STREAM_NAME, LOW_STREAM_NAME
 
 logger = logging.getLogger(__name__)
 
 
 class StreamService:
-    """Checks go2rtc stream availability and constructs stream URLs."""
 
     def __init__(self):
         self._base_url = f"http://{settings.go2rtc_host}:{settings.go2rtc_port}"
@@ -34,18 +33,14 @@ class StreamService:
         return _stream_url(name, protocol)
 
     async def get_low_bandwidth_url(self, protocol: str = "webrtc") -> dict:
-        if not transcode_service.available:
-            return {"available": False, "url": "", "protocol": protocol}
-
-        stream_name = settings.low_bandwidth_stream_name
-
+        stream_name = LOW_STREAM_NAME
         return {
             "available": True,
             "url": _stream_url(stream_name, protocol),
             "protocol": protocol,
             "stream_name": stream_name,
-            "encoder": transcode_service.encoder,
-            "hw_accelerated": transcode_service.hw_accelerated,
+            "encoder": "libx264",
+            "hw_accelerated": False,
         }
 
 

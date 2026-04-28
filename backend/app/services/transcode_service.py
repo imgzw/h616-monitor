@@ -12,6 +12,7 @@ FALLBACK_ENCODER = "libx264"
 FALLBACK_PRESET = "ultrafast"
 FALLBACK_TUNE = "zerolatency"
 LOW_STREAM_NAME = "camera_low"
+H264_STREAM_NAME = "camera_h264"
 
 V4L2_M2M_DEVICES = [
     "/dev/video32",
@@ -47,6 +48,10 @@ class TranscodeService:
     def stream_name(self) -> str:
         return LOW_STREAM_NAME
 
+    @property
+    def h264_stream_name(self) -> str:
+        return H264_STREAM_NAME
+
     async def initialize(self) -> None:
         self._available_encoders = await self._detect_encoders()
         self._v4l2_m2m_available = self._check_v4l2_m2m_device()
@@ -61,35 +66,39 @@ class TranscodeService:
             self._selected_encoder = FALLBACK_ENCODER
             self._hw_accelerated = False
             logger.info(
-                "V4L2 M2M not available, falling back to %s (preset=%s, tune=%s)",
+                "Software H.264 encoding available (encoder=%s, preset=%s, tune=%s)",
                 FALLBACK_ENCODER,
                 FALLBACK_PRESET,
                 FALLBACK_TUNE,
             )
         else:
             self._selected_encoder = ""
-            logger.warning("No H.264 encoder available, low-bandwidth streaming disabled")
+            logger.warning("No H.264 encoder available, transcoding disabled")
 
         self._initialized = True
 
     def get_go2rtc_stream_config(self) -> str:
+        """Return go2rtc stream config line for transcoded streams.
+        Returns empty string if no encoder available.
+        Note: exec: format is used since ffmpeg runs as subprocess for H.264 encoding.
+        V4L2 M2M is not available on H616 (cedrus is decoder-only), so libx264 is used.
+        """
         if not self._selected_encoder:
             return ""
 
-        if self._hw_accelerated:
-            params = f"#video={V4L2_M2M_ENCODER}"
-            if settings.low_bandwidth_bitrate:
-                params += f"#video_bitrate={settings.low_bandwidth_bitrate}"
-        else:
-            params = (
-                f"#video={FALLBACK_ENCODER}"
-                f"#preset={FALLBACK_PRESET}"
-                f"#tune={FALLBACK_TUNE}"
-            )
-            if settings.low_bandwidth_bitrate:
-                params += f"#video_bitrate={settings.low_bandwidth_bitrate}"
+        vf = "scale=640:360" if self._hw_accelerated else "scale=640:360"
+        params = f"-c:v {self._selected_encoder}"
+        if not self._hw_accelerated:
+            params += f" -preset {FALLBACK_PRESET} -tune {FALLBACK_TUNE}"
+        if settings.low_bandwidth_bitrate:
+            params += f" -b:v {settings.low_bandwidth_bitrate}"
 
-        return f"ffmpeg:{settings.camera_name}{params}"
+        h264_cmd = (
+            f'exec:ffmpeg -f v4l2 -input_format mjpeg '
+            f'-video_size 1280x720 -framerate 15 -i {settings.camera_device} '
+            f'-vf {vf} {params} -g 30 -f h264 pipe:1'
+        )
+        return h264_cmd
 
     async def _detect_encoders(self) -> list[str]:
         try:
@@ -157,6 +166,7 @@ class TranscodeService:
             "hw_accelerated": self._hw_accelerated,
             "v4l2_m2m_available": self._v4l2_m2m_available,
             "stream_name": self.stream_name if self.available else "",
+            "h264_stream_name": H264_STREAM_NAME,
             "low_bandwidth_bitrate": settings.low_bandwidth_bitrate,
         }
 
