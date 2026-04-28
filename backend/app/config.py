@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
 
-    camera_device: str = "/dev/video0"
+    camera_device: str = "/dev/video1"
     camera_name: str = "camera"
 
     recordings_dir: Path = Path("/opt/h616-monitor/recordings")
