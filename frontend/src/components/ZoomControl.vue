@@ -36,13 +36,17 @@ const loading = ref(false)
 
 async function loadZoomControl() {
   for (const name of ['zoom_absolute', 'zoom_relative']) {
-    const { data } = await getControl(name)
-    if (data && data.name) {
-      zoomMin.value = data.min_val
-      zoomMax.value = data.max_val
-      zoomStep.value = data.step || 1
-      zoomValue.value = data.current_val
-      return
+    try {
+      const { data } = await getControl(name)
+      if (data && data.name) {
+        zoomMin.value = data.min_val
+        zoomMax.value = data.max_val
+        zoomStep.value = data.step || 1
+        zoomValue.value = data.current_val
+        return
+      }
+    } catch {
+      // Try the next supported V4L2 zoom control name.
     }
   }
 }

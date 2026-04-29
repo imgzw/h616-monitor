@@ -84,7 +84,7 @@ import ZoomControl from '../components/ZoomControl.vue'
 import { getStatus, startRecording, stopRecording, type SystemStatus } from '../api'
 
 const playerRef = ref()
-const streamName = ref('camera')
+const streamName = ref('camera_h264')
 const lowBandwidth = ref(false)
 
 const status = reactive<Partial<SystemStatus>>({
