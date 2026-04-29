@@ -8,10 +8,15 @@ class Settings(BaseSettings):
 
     camera_device: str = "/dev/video1"
     camera_name: str = "camera_h264"
+    recording_stream_name: str = "camera_h264"
+    recording_stream_format: str = "ts"
 
     recordings_dir: Path = Path("/opt/h616-monitor/recordings")
     segment_duration: int = 300
     recording_format: str = "mp4"
+    recording_video_codec: str = "copy"
+    recording_preset: str = "ultrafast"
+    recording_crf: int = 23
 
     disk_high_threshold: float = 0.80
     disk_low_threshold: float = 0.70

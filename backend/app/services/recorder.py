@@ -44,26 +44,41 @@ class RecorderService:
 
             stream_url = (
                 f"http://{settings.go2rtc_host}:{settings.go2rtc_port}"
-                f"/api/stream.mjpeg?src={settings.camera_name}"
+                f"/api/stream.{settings.recording_stream_format}?src={settings.recording_stream_name}"
             )
 
             output_pattern = str(self._recording_dir / "%H-%M-%S.mp4")
 
             cmd = [
                 settings.ffmpeg_path,
-                "-threads", "2",
-                "-f", "mjpeg",
+                "-hide_banner",
+                "-loglevel", "warning",
                 "-i", stream_url,
-                "-c:v", "copy",
-                "-movflags", "+faststart",
+                "-an",
+            ]
+
+            if settings.recording_video_codec == "copy":
+                cmd.extend(["-c:v", "copy"])
+            else:
+                cmd.extend([
+                    "-threads", "2",
+                    "-c:v", settings.recording_video_codec,
+                    "-preset", settings.recording_preset,
+                    "-tune", "zerolatency",
+                    "-crf", str(settings.recording_crf),
+                    "-pix_fmt", "yuv420p",
+                ])
+
+            cmd.extend([
                 "-f", "segment",
                 "-segment_time", str(settings.segment_duration),
                 "-segment_format", settings.recording_format,
+                "-segment_format_options", "movflags=+faststart",
                 "-strftime", "1",
                 "-reset_timestamps", "1",
                 "-segment_atclocktime", "1",
                 output_pattern,
-            ]
+            ])
 
             logger.info("Starting recording: %s", " ".join(cmd))
 
@@ -71,9 +86,16 @@ class RecorderService:
                 self._process = subprocess.Popen(
                     cmd,
                     stdout=subprocess.DEVNULL,
-                    stderr=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
                     preexec_fn=os.setpgrp,
                 )
+                await asyncio.sleep(1)
+                rc = self._process.poll()
+                if rc is not None:
+                    logger.error("ffmpeg exited during startup (rc=%d)", rc)
+                    self._process = None
+                    self._started_at = None
+                    return False
                 asyncio.create_task(self._monitor_process())
                 logger.info("Recording started, PID=%d", self._process.pid)
                 return True
