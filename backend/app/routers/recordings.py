@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
@@ -12,6 +13,16 @@ from app.services.recorder import recorder
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/recordings", tags=["recordings"])
+
+
+def _recording_path(path: str) -> Path:
+    base = settings.recordings_dir.resolve()
+    filepath = (base / path).resolve()
+    try:
+        filepath.relative_to(base)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    return filepath
 
 
 @router.post("/start")
@@ -56,7 +67,7 @@ async def delete_recording(path: str):
 
 @router.get("/download/{path:path}")
 async def download_recording(path: str):
-    filepath = settings.recordings_dir / path
+    filepath = _recording_path(path)
     if not filepath.is_file():
         raise HTTPException(status_code=404, detail="Recording not found")
     return FileResponse(
@@ -68,13 +79,14 @@ async def download_recording(path: str):
 
 @router.get("/thumbnail/{path:path}")
 async def get_thumbnail(path: str):
-    filepath = settings.recordings_dir / path
+    filepath = _recording_path(path)
     if not filepath.is_file():
         raise HTTPException(status_code=404, detail="Recording not found")
 
     thumb_dir = settings.recordings_dir / ".thumbnails"
     thumb_dir.mkdir(exist_ok=True)
-    thumb_path = thumb_dir / f"{filepath.stem}.jpg"
+    rel_path = filepath.relative_to(settings.recordings_dir.resolve()).as_posix()
+    thumb_path = thumb_dir / f"{rel_path.replace('/', '__')}.jpg"
 
     if thumb_path.exists():
         return FileResponse(thumb_path, media_type="image/jpeg")

@@ -119,7 +119,9 @@ class DiskManagerService:
         }
 
     async def delete_recording(self, rel_path: str) -> bool:
-        filepath = settings.recordings_dir / rel_path
+        filepath = self._safe_recording_path(rel_path)
+        if filepath is None:
+            return False
         if not filepath.is_file():
             return False
         try:
@@ -206,6 +208,16 @@ class DiskManagerService:
                 break
             except Exception:
                 logger.exception("File index refresh error")
+
+    @staticmethod
+    def _safe_recording_path(rel_path: str) -> Path | None:
+        base = settings.recordings_dir.resolve()
+        filepath = (base / rel_path).resolve()
+        try:
+            filepath.relative_to(base)
+        except ValueError:
+            return None
+        return filepath
 
     @staticmethod
     def _human_size(num_bytes: int) -> str:
