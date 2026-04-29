@@ -149,12 +149,15 @@ setup_nginx() {
 build_frontend() {
     local src_hash="$CURRENT_DIR/frontend/package.json"
     local dist_hash="$INSTALL_DIR/frontend/.build-hash"
+    local new_hash
+    new_hash=$(find "$CURRENT_DIR/frontend/src" -type f \( -name '*.ts' -o -name '*.vue' -o -name '*.css' \) -print0 \
+        | sort -z \
+        | xargs -0 md5sum "$CURRENT_DIR/frontend/package.json" "$CURRENT_DIR/frontend/package-lock.json" "$CURRENT_DIR/frontend/index.html" "$CURRENT_DIR/frontend/tsconfig.json" "$CURRENT_DIR/frontend/vite.config.ts" \
+        | md5sum | cut -d' ' -f1)
 
     if [ "$FORCE_FLAG" -eq 0 ] && [ -f "$dist_hash" ]; then
         local old_hash
         old_hash=$(cat "$dist_hash" 2>/dev/null || echo "")
-        local new_hash
-        new_hash=$(md5sum "$src_hash" "$CURRENT_DIR/frontend/src/App.vue" 2>/dev/null | md5sum | cut -d' ' -f1 || echo "")
         if [ "$old_hash" = "$new_hash" ] && [ -d "$INSTALL_DIR/frontend/dist" ]; then
             info "Frontend unchanged, skipping build. Use --force to rebuild."
             return 0
@@ -167,7 +170,7 @@ build_frontend() {
     npm run build
     mkdir -p "$INSTALL_DIR/frontend/dist"
     cp -rf dist/* "$INSTALL_DIR/frontend/dist/"
-    md5sum "$src_hash" "$CURRENT_DIR/frontend/src/App.vue" 2>/dev/null | md5sum | cut -d' ' -f1 > "$dist_hash"
+    echo "$new_hash" > "$dist_hash"
     chown -R h616-monitor:h616-monitor "$INSTALL_DIR/frontend"
     info "Frontend built and installed."
 }
