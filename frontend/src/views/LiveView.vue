@@ -10,7 +10,7 @@
           <div class="panel-title">视频源</div>
           <div class="stream-info">
             <span class="sw-badge">MJPEG 直出</span>
-            <span class="stream-detail">1280x720 · 15fps</span>
+            <span class="stream-detail">1280x720 · 120fps</span>
           </div>
         </div>
         <div class="control-panel">

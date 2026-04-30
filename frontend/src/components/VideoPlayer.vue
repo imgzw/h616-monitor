@@ -5,6 +5,7 @@
       :src="mjpegUrl"
       class="video-element"
       @load="onMjpegFirstFrame"
+      @progress="bumpFrame"
       @error="onMjpegError"
     />
     <video
@@ -195,7 +196,7 @@ async function connect() {
 
 function connectMjpeg() {
   mode.value = 'mjpeg'
-  fpsText.value = '15 fps'
+  fpsText.value = ''
   modeInfo.value = 'MJPEG 直出模式'
   connecting.value = false
   connected.value = false
@@ -205,8 +206,8 @@ function onMjpegFirstFrame() {
   if (!connected.value) {
     connected.value = true
     resolution.value = '1280x720'
-    fpsText.value = '15 fps'
   }
+  bumpFrame()
 }
 
 function onMjpegError() {

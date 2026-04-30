@@ -1,6 +1,6 @@
 streams:
   camera:
-    - v4l2:device?video=/dev/video1&input_format=mjpeg&video_size=1280x720&framerate=15
+    - v4l2:device?video=/dev/video1&input_format=mjpeg&video_size=1280x720&framerate=120
 
 api:
   listen: ":1984"
