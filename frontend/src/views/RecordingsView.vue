@@ -26,7 +26,7 @@
       <el-progress
         :percentage="storage.usage_percent"
         :stroke-width="12"
-        :color="diskColor"
+        :color="diskColorVal"
         :show-text="false"
       />
     </div>
@@ -70,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { Delete, Loading } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import RecordingCard from '../components/RecordingCard.vue'
@@ -83,6 +83,7 @@ import {
   type RecordingItem,
   type StorageInfo as StorageInfoType,
 } from '../api'
+import { formatSize, diskColor } from '../utils/format'
 
 const recordings = ref<RecordingItem[]>([])
 const loading = ref(false)
@@ -152,21 +153,7 @@ async function handleCleanup() {
   }
 }
 
-function formatSize(bytes: number) {
-  if (!bytes) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let size = bytes
-  let i = 0
-  while (size >= 1024 && i < units.length - 1) { size /= 1024; i++ }
-  return `${size.toFixed(1)} ${units[i]}`
-}
-
-const diskColor = () => {
-  const pct = storage.usage_percent
-  if (pct > 90) return '#e94560'
-  if (pct > 75) return '#f39c12'
-  return '#2ecc71'
-}
+const diskColorVal = computed(() => diskColor(storage.usage_percent))
 
 onMounted(() => {
   loadRecordings()
@@ -184,31 +171,33 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 .recordings-header h2 {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
 }
 .header-actions {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
 }
 .storage-bar {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 16px;
+  border-radius: var(--radius);
+  padding: 12px 14px;
 }
 .storage-info {
   display: flex;
   justify-content: space-between;
   margin-bottom: 6px;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 .loading-container,
@@ -217,22 +206,44 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   flex: 1;
-  min-height: 300px;
+  min-height: 280px;
 }
 .recordings-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
   flex: 1;
+  align-content: start;
 }
 .pagination-container {
   display: flex;
   justify-content: center;
-  margin-top: 20px;
+  margin-top: 16px;
+  padding-bottom: 8px;
 }
 .playback-video {
   width: 100%;
   max-height: 70vh;
   background: #000;
+  border-radius: var(--radius-sm);
+}
+
+@media (max-width: 768px) {
+  .recordings-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+  }
+  .header-actions {
+    width: 100%;
+  }
+  .header-actions .el-date-picker {
+    flex: 1;
+    min-width: 0;
+  }
+}
+@media (max-width: 480px) {
+  .recordings-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

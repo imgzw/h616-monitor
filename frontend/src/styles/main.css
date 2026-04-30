@@ -1,15 +1,23 @@
 :root {
-  --bg-primary: #1a1a2e;
-  --bg-secondary: #16213e;
-  --bg-tertiary: #0f3460;
+  --bg-primary: #0d1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #1c2333;
+  --bg-card: #161b22;
   --accent: #e94560;
   --accent-hover: #ff6b81;
-  --text-primary: #e8e8e8;
-  --text-secondary: #a0a0b0;
-  --success: #2ecc71;
-  --warning: #f39c12;
+  --accent-glow: rgba(233, 69, 96, 0.12);
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-tertiary: #484f58;
+  --success: #3fb950;
+  --warning: #d29922;
   --danger: #e94560;
-  --border: #2a2a4a;
+  --border: #21262d;
+  --border-light: #30363d;
+  --radius: 8px;
+  --radius-sm: 4px;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -20,45 +28,82 @@ html, body, #app {
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+
+/* Element Plus dark overrides */
 html.dark {
   --el-bg-color: var(--bg-secondary);
   --el-bg-color-overlay: var(--bg-tertiary);
   --el-bg-color-page: var(--bg-primary);
   --el-border-color: var(--border);
-  --el-border-color-light: var(--border);
+  --el-border-color-light: var(--border-light);
   --el-text-color-primary: var(--text-primary);
   --el-text-color-regular: var(--text-secondary);
   --el-fill-color-blank: var(--bg-secondary);
+  --el-color-primary: var(--accent);
+  --el-color-primary-light-3: rgba(233, 69, 96, 0.3);
+  --el-color-primary-light-5: rgba(233, 69, 96, 0.5);
+  --el-color-primary-light-7: rgba(233, 69, 96, 0.15);
+  --el-color-primary-light-9: rgba(233, 69, 96, 0.05);
+  --el-font-size-base: 13px;
 }
 
-.el-menu {
-  border-right: none !important;
-}
+.el-menu { border-right: none !important; }
 
 .el-card {
-  --el-card-bg-color: var(--bg-secondary);
+  --el-card-bg-color: var(--bg-card);
   border-color: var(--border);
+  border-radius: var(--radius);
 }
 
+.el-button--primary {
+  --el-button-bg-color: var(--accent);
+  --el-button-border-color: var(--accent);
+  --el-button-hover-bg-color: var(--accent-hover);
+  --el-button-hover-border-color: var(--accent-hover);
+}
+
+.el-button--danger {
+  --el-button-bg-color: var(--danger);
+  --el-button-border-color: var(--danger);
+}
+
+/* Status dots */
 .status-dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   display: inline-block;
-  margin-right: 8px;
+  margin-right: 6px;
+  flex-shrink: 0;
 }
-.status-dot.active { background: var(--success); box-shadow: 0 0 8px var(--success); }
+.status-dot.active { background: var(--success); box-shadow: 0 0 6px rgba(63, 185, 80, 0.4); }
 .status-dot.recording { background: var(--accent); animation: pulse 1.5s ease-in-out infinite; }
-.status-dot.inactive { background: #555; }
+.status-dot.inactive { background: var(--text-tertiary); }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--accent); }
+  50% { opacity: 0.35; box-shadow: 0 0 2px var(--accent); }
 }
 
-.slide-fade-enter-active { transition: all 0.3s ease; }
-.slide-fade-leave-active { transition: all 0.2s ease; }
-.slide-fade-enter-from { transform: translateX(20px); opacity: 0; }
-.slide-fade-leave-to { transform: translateX(-20px); opacity: 0; }
+/* Route transitions */
+.fade-slide-enter-active { transition: all 0.2s ease-out; }
+.fade-slide-leave-active { transition: all 0.12s ease-in; }
+.fade-slide-enter-from { transform: translateY(6px); opacity: 0; }
+.fade-slide-leave-to { transform: translateY(-4px); opacity: 0; }
+
+/* Recording card - remove duplicate padding */
+.recording-card .el-card__body { padding: 0; }
+
+/* Responsive breakpoints */
+@media (max-width: 768px) {
+  :root {
+    --radius: 6px;
+  }
+}

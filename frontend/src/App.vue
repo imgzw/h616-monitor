@@ -26,13 +26,19 @@
       </div>
     </el-aside>
     <el-main class="app-main">
-      <router-view />
+      <router-view v-slot="{ Component }">
+        <transition name="fade-slide" mode="out-in">
+          <keep-alive>
+            <component :is="Component" />
+          </keep-alive>
+        </transition>
+      </router-view>
     </el-main>
   </el-container>
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, onMounted, onBeforeUnmount } from 'vue'
+import { computed, reactive, onMounted, onBeforeUnmount, provide } from 'vue'
 import { useRoute } from 'vue-router'
 import { Monitor, VideoCamera, Film } from '@element-plus/icons-vue'
 import { getStatus, type SystemStatus } from './api'
@@ -40,16 +46,24 @@ import { getStatus, type SystemStatus } from './api'
 const route = useRoute()
 const activeMenu = computed(() => route.path)
 
-const systemStatus = reactive<Partial<SystemStatus>>({
+const systemStatus = reactive<SystemStatus>({
   stream_active: false,
+  recording: { is_recording: false, started_at: null, segment_duration: 300, pid: null },
+  storage: { total_bytes: 0, used_bytes: 0, free_bytes: 0, usage_percent: 0, recordings_bytes: 0, recordings_count: 0 },
+  cpu_temp: { temp_c: 0, high_threshold: 75, critical_threshold: 85, warning: false },
+  transcode: { available: false, encoder: '', hw_accelerated: false, v4l2_m2m_available: false, stream_name: '', low_bandwidth_bitrate: 0 },
+  uptime_seconds: 0,
 })
+
+provide('systemStatus', systemStatus)
+provide('refreshStatus', pollStatus)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 async function pollStatus() {
   try {
     const { data } = await getStatus()
-    systemStatus.stream_active = data.stream_active
+    Object.assign(systemStatus, data)
   } catch {
     systemStatus.stream_active = false
   }
@@ -57,7 +71,7 @@ async function pollStatus() {
 
 onMounted(() => {
   pollStatus()
-  pollTimer = setInterval(pollStatus, 10000)
+  pollTimer = setInterval(pollStatus, 5000)
 })
 onBeforeUnmount(() => {
   if (pollTimer) clearInterval(pollTimer)
@@ -85,6 +99,11 @@ onBeforeUnmount(() => {
   justify-content: center;
   cursor: pointer;
   margin-bottom: 8px;
+  border-radius: var(--radius-sm);
+  transition: background 0.2s;
+}
+.sidebar-logo:hover {
+  background: var(--bg-tertiary);
 }
 .sidebar-menu {
   border-right: none;
@@ -96,6 +115,9 @@ onBeforeUnmount(() => {
   justify-content: center;
   height: 48px;
   padding: 0 !important;
+  border-radius: 6px;
+  margin: 2px 6px;
+  transition: background 0.15s;
 }
 .sidebar-menu .el-menu-item .el-icon {
   margin-right: 0;
@@ -111,8 +133,15 @@ onBeforeUnmount(() => {
 }
 .app-main {
   background: var(--bg-primary);
-  padding: 20px;
+  padding: 16px;
   overflow-y: auto;
-  --el-main-padding: 20px;
+  --el-main-padding: 16px;
+}
+
+@media (max-width: 768px) {
+  .app-main {
+    padding: 10px;
+    --el-main-padding: 10px;
+  }
 }
 </style>

@@ -6,6 +6,20 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Shared httpx client with connection pooling for go2rtc API calls.
+# Created lazily since settings may not be loaded at import time in tests.
+_client: httpx.AsyncClient | None = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(
+            timeout=httpx.Timeout(3.0),
+            limits=httpx.Limits(max_keepalive_connections=4, max_connections=10),
+        )
+    return _client
+
 
 class StreamService:
 
@@ -14,16 +28,16 @@ class StreamService:
 
     async def is_active(self) -> bool:
         try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
-                resp = await client.get(f"{self._base_url}/api/streams")
-                if resp.status_code != 200:
-                    return False
-                streams = resp.json()
-                if isinstance(streams, dict):
-                    return settings.camera_name in streams
-                if isinstance(streams, list):
-                    return settings.camera_name in [s.get("name") or s for s in streams]
+            client = _get_client()
+            resp = await client.get(f"{self._base_url}/api/streams")
+            if resp.status_code != 200:
                 return False
+            streams = resp.json()
+            if isinstance(streams, dict):
+                return settings.camera_name in streams
+            if isinstance(streams, list):
+                return settings.camera_name in [s.get("name") or s for s in streams]
+            return False
         except Exception:
             return False
 

@@ -11,12 +11,15 @@
           <div class="bandwidth-toggle">
             <el-switch
               v-model="lowBandwidth"
-              active-text="省流"
-              inactive-text="高清"
+              active-text="直出"
+              inactive-text="H.264"
               @change="onBandwidthChange"
             />
             <div v-if="lowBandwidth" class="encoder-info">
-              <span class="sw-badge">MJPEG 低耗</span>
+              <span class="sw-badge">MJPEG 零转码</span>
+            </div>
+            <div v-else class="encoder-info">
+              <span class="hw-badge">WebRTC 低延迟</span>
             </div>
           </div>
         </div>
@@ -59,7 +62,7 @@
             <el-progress
               :percentage="status.storage?.usage_percent ?? 0"
               :stroke-width="10"
-              :color="diskColor"
+              :color="diskColorVal"
             />
           </div>
           <div class="status-row storage-detail">
@@ -76,28 +79,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, inject } from 'vue'
 import { VideoCamera, VideoPause } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import VideoPlayer from '../components/VideoPlayer.vue'
 import ZoomControl from '../components/ZoomControl.vue'
-import { getStatus, startRecording, stopRecording, type SystemStatus } from '../api'
+import { startRecording, stopRecording, type SystemStatus } from '../api'
+import { formatSize, formatUptime, formatTime, diskColor } from '../utils/format'
 
 const playerRef = ref()
 const streamName = ref('camera_h264')
-const lowBandwidth = ref(false)
+const lowBandwidth = ref(true)
 
-const status = reactive<Partial<SystemStatus>>({
-  stream_active: false,
-  recording: { is_recording: false, started_at: null, segment_duration: 300, pid: null },
-  storage: { total_bytes: 0, used_bytes: 0, free_bytes: 0, usage_percent: 0, recordings_bytes: 0, recordings_count: 0 },
-  cpu_temp: { temp_c: 0, high_threshold: 75, critical_threshold: 85, warning: false },
-  transcode: { available: false, encoder: '', hw_accelerated: false, v4l2_m2m_available: false, stream_name: '', low_bandwidth_bitrate: 0 },
-  uptime_seconds: 0,
-})
+const status = inject<SystemStatus>('systemStatus')!
+const refreshStatus = inject<() => Promise<void>>('refreshStatus')!
 
-const transcodeAvailable = computed(() => status.transcode?.available ?? false)
-const transcodeInfo = computed(() => status.transcode)
 const tempClass = computed(() => {
   const t = status.cpu_temp?.temp_c ?? 0
   if (t < 0) return 'temp-unknown'
@@ -106,22 +102,11 @@ const tempClass = computed(() => {
   return 'temp-normal'
 })
 
-let pollTimer: ReturnType<typeof setInterval> | null = null
-
-async function fetchStatus() {
-  try {
-    const { data } = await getStatus()
-    Object.assign(status, data)
-  } catch {
-    // silent
-  }
-}
-
 async function handleStart() {
   try {
     await startRecording()
     ElMessage.success('开始录制')
-    await fetchStatus()
+    await refreshStatus()
   } catch {
     ElMessage.error('启动录制失败')
   }
@@ -131,7 +116,7 @@ async function handleStop() {
   try {
     await stopRecording()
     ElMessage.success('录制已停止')
-    await fetchStatus()
+    await refreshStatus()
   } catch {
     ElMessage.error('停止录制失败')
   }
@@ -141,41 +126,7 @@ function onBandwidthChange(val: boolean) {
   lowBandwidth.value = val
 }
 
-function formatTime(iso: string | null | undefined) {
-  if (!iso) return '-'
-  return new Date(iso).toLocaleTimeString('zh-CN')
-}
-
-function formatUptime(sec: number | undefined) {
-  if (!sec) return '-'
-  const h = Math.floor(sec / 3600)
-  const m = Math.floor((sec % 3600) / 60)
-  return `${h}小时${m}分钟`
-}
-
-function formatSize(bytes: number | undefined) {
-  if (!bytes) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let size = bytes
-  let i = 0
-  while (size >= 1024 && i < units.length - 1) { size /= 1024; i++ }
-  return `${size.toFixed(1)} ${units[i]}`
-}
-
-const diskColor = () => {
-  const pct = status.storage?.usage_percent ?? 0
-  if (pct > 90) return '#e94560'
-  if (pct > 75) return '#f39c12'
-  return '#2ecc71'
-}
-
-onMounted(() => {
-  fetchStatus()
-  pollTimer = setInterval(fetchStatus, 5000)
-})
-onBeforeUnmount(() => {
-  if (pollTimer) clearInterval(pollTimer)
-})
+const diskColorVal = computed(() => diskColor(status.storage?.usage_percent ?? 0))
 </script>
 
 <style scoped>
@@ -193,9 +144,12 @@ onBeforeUnmount(() => {
 .video-wrapper {
   flex: 1;
   min-width: 0;
+  background: #000;
+  border-radius: var(--radius);
+  overflow: hidden;
 }
 .live-sidebar {
-  width: 280px;
+  width: 260px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -204,53 +158,52 @@ onBeforeUnmount(() => {
 .control-panel {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 14px;
 }
 .panel-title {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
-  margin-bottom: 12px;
-  color: var(--text-primary);
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 .bandwidth-toggle {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
 }
 .encoder-info {
   font-size: 11px;
+  white-space: nowrap;
 }
 .hw-badge {
-  background: rgba(46, 204, 113, 0.2);
-  color: #2ecc71;
-  padding: 2px 6px;
-  border-radius: 3px;
+  background: rgba(63, 185, 80, 0.12);
+  color: var(--success);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
 }
 .sw-badge {
-  background: rgba(243, 156, 18, 0.2);
-  color: #f39c12;
-  padding: 2px 6px;
-  border-radius: 3px;
-}
-.na-badge {
-  color: var(--text-secondary);
+  background: rgba(210, 153, 34, 0.12);
+  color: var(--warning);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
   font-size: 11px;
 }
 .recording-status {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
-  font-size: 14px;
+  margin-bottom: 8px;
+  font-size: 13px;
 }
 .recording-info {
   font-size: 12px;
   color: var(--text-secondary);
-  margin-bottom: 10px;
-}
-.recording-actions {
-  margin-top: 4px;
+  margin-bottom: 8px;
 }
 .recording-actions .el-button {
   width: 100%;
@@ -259,29 +212,48 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   font-size: 13px;
 }
+.status-row:last-child { margin-bottom: 0; }
 .status-label {
   color: var(--text-secondary);
-  min-width: 60px;
+  min-width: 54px;
+  font-size: 12px;
 }
 .storage-detail {
   justify-content: flex-end;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
-  margin-top: -6px;
+  margin-top: -4px;
 }
-.temp-value {
-  font-weight: 600;
-}
-.temp-normal { color: #2ecc71; }
-.temp-high { color: #f39c12; }
-.temp-critical { color: #e94560; }
+.temp-value { font-weight: 600; }
+.temp-normal { color: var(--success); }
+.temp-high { color: var(--warning); }
+.temp-critical { color: var(--danger); }
 .temp-unknown { color: var(--text-secondary); }
 .temp-warn {
-  color: #e94560;
+  color: var(--danger);
   font-size: 11px;
   font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .live-main {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .video-wrapper {
+    aspect-ratio: 16 / 9;
+    max-height: 45vh;
+  }
+  .live-sidebar {
+    width: 100%;
+    flex-shrink: 1;
+    gap: 8px;
+  }
+  .control-panel {
+    padding: 12px;
+  }
 }
 </style>

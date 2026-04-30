@@ -4,7 +4,7 @@
       v-if="mode === 'mjpeg'"
       :src="mjpegUrl"
       class="video-element"
-      @load="onMjpegLoad"
+      @load="onMjpegFrame"
       @error="onMjpegError"
     />
     <video
@@ -15,6 +15,7 @@
       muted
       class="video-element"
       @loadedmetadata="onVideoReady"
+      @timeupdate="onVideoFrame"
     />
     <div v-if="!connected" class="video-overlay">
       <el-icon :size="48" class="connecting-icon"><VideoCamera /></el-icon>
@@ -25,9 +26,14 @@
     <div v-if="connected" class="video-overlay-hover" @click.stop>
       <div class="overlay-status">
         <span class="status-dot active" />
-        <span>实时{{ lowBandwidth ? ' (省流)' : '' }} — {{ resolution }}</span>
+        <span>{{ resolution }}</span>
         <span class="encoder-badge">{{ modeBadge }}</span>
       </div>
+    </div>
+    <!-- Permanent overlay: time + FPS -->
+    <div v-if="connected" class="video-info-bar">
+      <span class="info-time">{{ currentTime }}</span>
+      <span class="info-fps">{{ fps }} fps</span>
     </div>
   </div>
 </template>
@@ -50,6 +56,42 @@ const resolution = ref('')
 const mode = ref<'webrtc' | 'mjpeg'>('webrtc')
 const modeInfo = ref('')
 
+// --- Clock ---
+const currentTime = ref('')
+let clockTimer: ReturnType<typeof setInterval> | null = null
+
+function updateClock() {
+  const now = new Date()
+  currentTime.value = now.toLocaleTimeString('zh-CN', { hour12: false })
+}
+
+// --- FPS ---
+const fps = ref(0)
+let frameTimestamps: number[] = []
+
+function recordFrame() {
+  const now = performance.now()
+  frameTimestamps.push(now)
+  const cutoff = now - 1000
+  while (frameTimestamps.length && frameTimestamps[0] < cutoff) {
+    frameTimestamps.shift()
+  }
+  fps.value = frameTimestamps.length
+}
+
+function onMjpegFrame() {
+  if (!connected.value) {
+    connected.value = true
+    resolution.value = '1280x720'
+  }
+  recordFrame()
+}
+
+function onVideoFrame() {
+  recordFrame()
+}
+
+// --- Connection state ---
 let pc: RTCPeerConnection | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 let webrtcFailed = false
@@ -64,13 +106,11 @@ const modeBadge = computed(() => {
 async function connect() {
   if (connecting.value) return
 
-  // Low bandwidth = MJPEG mode (no H264 encoding needed)
   if (props.lowBandwidth) {
     connectMjpeg()
     return
   }
 
-  // If WebRTC already failed on this stream, fall back to MJPEG
   if (webrtcFailed) {
     connectMjpeg()
     return
@@ -139,14 +179,9 @@ async function connect() {
 
 function connectMjpeg() {
   mode.value = 'mjpeg'
-  modeInfo.value = 'MJPEG 省流模式'
+  modeInfo.value = 'MJPEG 直出模式'
   connecting.value = false
   connected.value = false
-}
-
-function onMjpegLoad() {
-  connected.value = true
-  resolution.value = '1280x720'
 }
 
 function onMjpegError() {
@@ -173,6 +208,8 @@ function disconnect() {
     pc = null
   }
   connected.value = false
+  fps.value = 0
+  frameTimestamps = []
 }
 
 function onVideoReady() {
@@ -182,14 +219,23 @@ function onVideoReady() {
   }
 }
 
-watch(() => props.lowBandwidth, () => {
+watch(() => props.lowBandwidth, (newVal) => {
   disconnect()
   webrtcFailed = false
+  modeInfo.value = ''
   connect()
 })
 
-onMounted(() => connect())
-onBeforeUnmount(() => disconnect())
+onMounted(() => {
+  updateClock()
+  clockTimer = setInterval(updateClock, 1000)
+  connect()
+})
+
+onBeforeUnmount(() => {
+  if (clockTimer) clearInterval(clockTimer)
+  disconnect()
+})
 
 defineExpose({ connect, disconnect, connected })
 </script>
@@ -198,8 +244,9 @@ defineExpose({ connect, disconnect, connected })
 .video-player {
   position: relative;
   width: 100%;
+  height: 100%;
   background: #000;
-  border-radius: 8px;
+  border-radius: var(--radius);
   overflow: hidden;
   aspect-ratio: 16 / 9;
 }
@@ -265,5 +312,37 @@ defineExpose({ connect, disconnect, connected })
   padding: 1px 6px;
   border-radius: 3px;
   font-size: 11px;
+}
+
+/* Permanent info bar: time + fps */
+.video-info-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 14px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 100%);
+  pointer-events: none;
+  z-index: 2;
+}
+.info-time {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+}
+.info-fps {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.8);
+  background: rgba(0,0,0,0.4);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
 }
 </style>

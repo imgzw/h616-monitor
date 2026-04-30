@@ -27,7 +27,7 @@
   </el-card>
 </template>
 
-<script setup lang="ts" generic="T extends RecordingItem">
+<script setup lang="ts">
 import { VideoPlay, Download, Delete } from '@element-plus/icons-vue'
 import type { RecordingItem } from '../api'
 import { getDownloadUrl } from '../api'
@@ -64,11 +64,12 @@ function handleDelete() {
 .recording-card {
   background: var(--bg-secondary);
   border-color: var(--border);
-  transition: transform 0.2s, border-color 0.2s;
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 .recording-card:hover {
-  transform: translateY(-2px);
-  border-color: var(--accent);
+  transform: translateY(-1px);
+  border-color: var(--border-light);
+  box-shadow: var(--shadow-lg);
 }
 
 .card-thumbnail {
@@ -90,7 +91,7 @@ function handleDelete() {
   align-items: center;
   justify-content: center;
   background: var(--bg-tertiary);
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
 }
 .thumbnail-overlay {
   position: absolute;
@@ -98,9 +99,9 @@ function handleDelete() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0,0,0,0.4);
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity 0.15s;
   color: #fff;
 }
 .card-thumbnail:hover .thumbnail-overlay {
@@ -120,15 +121,15 @@ function handleDelete() {
 }
 .card-meta {
   display: flex;
-  gap: 12px;
-  margin-top: 4px;
+  gap: 10px;
+  margin-top: 3px;
   font-size: 12px;
   color: var(--text-secondary);
 }
 .card-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 4px;
-  margin-top: 6px;
+  gap: 2px;
+  margin-top: 4px;
 }
 </style>

@@ -15,7 +15,8 @@ class DiskManagerService:
     def __init__(self):
         self._task: asyncio.Task | None = None
         self._refresh_task: asyncio.Task | None = None
-        self._file_index: dict[str, float] = {}
+        self._file_index: dict[str, dict[str, float]] = {}
+        self._recordings_size: int = 0
 
     def start(self):
         self._rebuild_index()
@@ -38,38 +39,40 @@ class DiskManagerService:
         rec_dir = settings.recordings_dir
         rec_dir.mkdir(parents=True, exist_ok=True)
         self._file_index = {}
+        self._recordings_size = 0
         for f in rec_dir.rglob("*.mp4"):
             if f.is_file():
-                self._file_index[str(f.relative_to(rec_dir))] = f.stat().st_mtime
-        logger.info("File index rebuilt: %d recordings", len(self._file_index))
+                st = f.stat()
+                rel = str(f.relative_to(rec_dir))
+                self._file_index[rel] = {"mtime": st.st_mtime, "size": st.st_size}
+                self._recordings_size += st.st_size
+        logger.info("File index rebuilt: %d recordings, %s total",
+                     len(self._file_index), self._human_size(self._recordings_size))
 
     def _index_add(self, rel_path: str):
         filepath = settings.recordings_dir / rel_path
         if filepath.is_file():
-            self._file_index[rel_path] = filepath.stat().st_mtime
+            st = filepath.stat()
+            self._file_index[rel_path] = {"mtime": st.st_mtime, "size": st.st_size}
+            self._recordings_size += st.st_size
 
     def _index_remove(self, rel_path: str):
-        self._file_index.pop(rel_path, None)
+        entry = self._file_index.pop(rel_path, None)
+        if entry:
+            self._recordings_size -= entry["size"]
 
     async def get_storage_info(self) -> dict:
         rec_dir = settings.recordings_dir
         rec_dir.mkdir(parents=True, exist_ok=True)
 
         disk = shutil.disk_usage(str(rec_dir))
-        rec_size = sum(
-            (settings.recordings_dir / p).stat().st_size
-            for p in self._file_index
-            if (settings.recordings_dir / p).is_file()
-        )
-        rec_count = len(self._file_index)
-
         return {
             "total_bytes": disk.total,
             "used_bytes": disk.used,
             "free_bytes": disk.free,
             "usage_percent": round(disk.used / disk.total * 100, 1),
-            "recordings_bytes": rec_size,
-            "recordings_count": rec_count,
+            "recordings_bytes": self._recordings_size,
+            "recordings_count": len(self._file_index),
         }
 
     async def list_recordings(
@@ -80,13 +83,13 @@ class DiskManagerService:
 
         if date_filter:
             matching = {
-                p: mtime for p, mtime in self._file_index.items()
+                p: info for p, info in self._file_index.items()
                 if p.startswith(date_filter + "/")
             }
         else:
             matching = dict(self._file_index)
 
-        sorted_paths = sorted(matching.keys(), key=lambda p: matching[p], reverse=True)
+        sorted_paths = sorted(matching.keys(), key=lambda p: matching[p]["mtime"], reverse=True)
         total = len(sorted_paths)
         start = (page - 1) * page_size
         end = start + page_size
@@ -94,19 +97,16 @@ class DiskManagerService:
 
         items = []
         for rel_path in page_paths:
-            filepath = rec_dir / rel_path
-            if not filepath.is_file():
-                continue
-            stat = filepath.stat()
+            info = matching[rel_path]
             date_part = Path(rel_path).parts[0] if len(Path(rel_path).parts) > 1 else ""
             time_part = Path(rel_path).stem
 
             items.append({
-                "filename": filepath.name,
+                "filename": Path(rel_path).name,
                 "path": rel_path,
-                "size_bytes": stat.st_size,
-                "size_human": self._human_size(stat.st_size),
-                "created_at": datetime.fromtimestamp(stat.st_mtime),
+                "size_bytes": info["size"],
+                "size_human": self._human_size(info["size"]),
+                "created_at": datetime.fromtimestamp(info["mtime"]),
                 "duration": None,
                 "thumbnail": f"/api/recordings/thumbnail/{rel_path}",
             })
@@ -179,7 +179,8 @@ class DiskManagerService:
         )
 
         for date_dir in date_dirs:
-            current_usage = (await self.get_storage_info())["usage_percent"] / 100.0
+            disk = shutil.disk_usage(str(settings.recordings_dir))
+            current_usage = disk.used / disk.total
             if current_usage <= settings.disk_low_threshold:
                 break
 
