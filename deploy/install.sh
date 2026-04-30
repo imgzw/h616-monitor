@@ -131,8 +131,9 @@ setup_systemd() {
     step "Configuring systemd services"
     cp "$CURRENT_DIR/deploy/go2rtc.service" /etc/systemd/system/
     cp "$CURRENT_DIR/deploy/h616-monitor.service" /etc/systemd/system/
+    cp "$CURRENT_DIR/deploy/h616-transcoder.service" /etc/systemd/system/
     systemctl daemon-reload
-    systemctl enable go2rtc h616-monitor
+    systemctl enable go2rtc h616-monitor h616-transcoder
     info "Systemd services configured."
 }
 
@@ -180,10 +181,12 @@ start_services() {
     step "Starting services"
     systemctl restart go2rtc
     sleep 2
+    systemctl restart h616-transcoder
     systemctl restart h616-monitor
     systemctl restart nginx
 
     systemctl is-active go2rtc >/dev/null && info "go2rtc: RUNNING" || error "go2rtc: FAILED"
+    systemctl is-active h616-transcoder >/dev/null && info "h616-transcoder: RUNNING" || error "h616-transcoder: FAILED"
     systemctl is-active h616-monitor >/dev/null && info "h616-monitor: RUNNING" || error "h616-monitor: FAILED"
     systemctl is-active nginx >/dev/null && info "nginx: RUNNING" || error "nginx: FAILED"
 

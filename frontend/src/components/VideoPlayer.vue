@@ -4,7 +4,7 @@
       v-if="mode === 'mjpeg'"
       :src="mjpegUrl"
       class="video-element"
-      @load="onMjpegFrame"
+      @load="onMjpegFirstFrame"
       @error="onMjpegError"
     />
     <video
@@ -15,7 +15,6 @@
       muted
       class="video-element"
       @loadedmetadata="onVideoReady"
-      @timeupdate="onVideoFrame"
     />
     <div v-if="!connected" class="video-overlay">
       <el-icon :size="48" class="connecting-icon"><VideoCamera /></el-icon>
@@ -23,17 +22,13 @@
       <p v-if="modeInfo" class="mode-info">{{ modeInfo }}</p>
       <el-button v-if="!connecting" type="primary" @click="connect">重新连接</el-button>
     </div>
-    <div v-if="connected" class="video-overlay-hover" @click.stop>
-      <div class="overlay-status">
-        <span class="status-dot active" />
-        <span>{{ resolution }}</span>
-        <span class="encoder-badge">{{ modeBadge }}</span>
-      </div>
-    </div>
-    <!-- Permanent overlay: time + FPS -->
-    <div v-if="connected" class="video-info-bar">
-      <span class="info-time">{{ currentTime }}</span>
-      <span class="info-fps">{{ fps }} fps</span>
+    <!-- CCTV-style timestamp overlay -->
+    <div v-if="connected" class="cctv-timestamp">
+      <span>{{ currentTime }}</span>
+      <span class="ts-sep">|</span>
+      <span>{{ fpsText }}</span>
+      <span class="ts-sep">|</span>
+      <span>{{ modeBadge }}</span>
     </div>
   </div>
 </template>
@@ -56,39 +51,59 @@ const resolution = ref('')
 const mode = ref<'webrtc' | 'mjpeg'>('webrtc')
 const modeInfo = ref('')
 
-// --- Clock ---
+// --- Clock (date + time, CCTV style) ---
 const currentTime = ref('')
 let clockTimer: ReturnType<typeof setInterval> | null = null
 
 function updateClock() {
   const now = new Date()
-  currentTime.value = now.toLocaleTimeString('zh-CN', { hour12: false })
+  const y = now.getFullYear()
+  const mo = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  const h = String(now.getHours()).padStart(2, '0')
+  const mi = String(now.getMinutes()).padStart(2, '0')
+  const s = String(now.getSeconds()).padStart(2, '0')
+  currentTime.value = `${y}-${mo}-${d} ${h}:${mi}:${s}`
 }
 
 // --- FPS ---
-const fps = ref(0)
-let frameTimestamps: number[] = []
+const fpsText = ref('')
+let frameCount = 0
+let fpsTimer: ReturnType<typeof setInterval> | null = null
+let rvfcId: number | null = null
 
-function recordFrame() {
-  const now = performance.now()
-  frameTimestamps.push(now)
-  const cutoff = now - 1000
-  while (frameTimestamps.length && frameTimestamps[0] < cutoff) {
-    frameTimestamps.shift()
-  }
-  fps.value = frameTimestamps.length
+function resetFpsCounter() {
+  frameCount = 0
 }
 
-function onMjpegFrame() {
-  if (!connected.value) {
-    connected.value = true
-    resolution.value = '1280x720'
-  }
-  recordFrame()
+function startFpsPolling() {
+  resetFpsCounter()
+  fpsTimer = setInterval(() => {
+    fpsText.value = frameCount > 0 ? `${frameCount} fps` : ''
+    frameCount = 0
+  }, 1000)
 }
 
-function onVideoFrame() {
-  recordFrame()
+function bumpFrame() {
+  frameCount++
+}
+
+function startRvfc() {
+  const video = videoRef.value
+  if (!video || typeof (video as any).requestVideoFrameCallback !== 'function') return
+
+  function callback() {
+    bumpFrame()
+    rvfcId = (video as any).requestVideoFrameCallback(callback)
+  }
+  rvfcId = (video as any).requestVideoFrameCallback(callback)
+}
+
+function stopRvfc() {
+  if (rvfcId !== null && videoRef.value) {
+    (videoRef.value as any).cancelVideoFrameCallback?.(rvfcId)
+    rvfcId = null
+  }
 }
 
 // --- Connection state ---
@@ -100,7 +115,7 @@ const mjpegUrl = computed(() => '/api/stream.mjpeg?src=camera')
 
 const modeBadge = computed(() => {
   if (mode.value === 'mjpeg') return 'MJPEG'
-  return 'WebRTC'
+  return 'H.264'
 })
 
 async function connect() {
@@ -135,6 +150,7 @@ async function connect() {
         videoRef.value.srcObject = event.streams[0]
         connected.value = true
         mode.value = 'webrtc'
+        startRvfc()
       }
     }
 
@@ -179,9 +195,18 @@ async function connect() {
 
 function connectMjpeg() {
   mode.value = 'mjpeg'
+  fpsText.value = '15 fps'
   modeInfo.value = 'MJPEG 直出模式'
   connecting.value = false
   connected.value = false
+}
+
+function onMjpegFirstFrame() {
+  if (!connected.value) {
+    connected.value = true
+    resolution.value = '1280x720'
+    fpsText.value = '15 fps'
+  }
 }
 
 function onMjpegError() {
@@ -199,17 +224,22 @@ function scheduleReconnect() {
 }
 
 function disconnect() {
+  stopRvfc()
   if (reconnectTimer) {
     clearTimeout(reconnectTimer)
     reconnectTimer = null
+  }
+  if (fpsTimer) {
+    clearInterval(fpsTimer)
+    fpsTimer = null
   }
   if (pc) {
     pc.close()
     pc = null
   }
   connected.value = false
-  fps.value = 0
-  frameTimestamps = []
+  fpsText.value = ''
+  frameCount = 0
 }
 
 function onVideoReady() {
@@ -219,7 +249,7 @@ function onVideoReady() {
   }
 }
 
-watch(() => props.lowBandwidth, (newVal) => {
+watch(() => props.lowBandwidth, () => {
   disconnect()
   webrtcFailed = false
   modeInfo.value = ''
@@ -229,6 +259,7 @@ watch(() => props.lowBandwidth, (newVal) => {
 onMounted(() => {
   updateClock()
   clockTimer = setInterval(updateClock, 1000)
+  startFpsPolling()
   connect()
 })
 
@@ -275,74 +306,38 @@ defineExpose({ connect, disconnect, connected })
   animation: pulse 2s ease-in-out infinite;
 }
 
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
 .mode-info {
   font-size: 12px;
   color: var(--text-tertiary);
 }
 
-.video-overlay-hover {
+/* CCTV-style timestamp */
+.cctv-timestamp {
   position: absolute;
-  inset: 0;
-  opacity: 0;
-  transition: opacity 0.3s;
-  pointer-events: none;
-}
-
-.video-player:hover .video-overlay-hover {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.overlay-status {
-  position: absolute;
-  top: 12px;
-  left: 12px;
+  bottom: 8px;
+  right: 12px;
   display: flex;
   align-items: center;
-  gap: 6px;
-  background: rgba(0,0,0,0.6);
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 13px;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
   color: #fff;
-}
-
-.encoder-badge {
-  background: rgba(46, 204, 113, 0.3);
-  padding: 1px 6px;
+  font-family: 'SF Mono', 'Cascadia Code', 'Menlo', 'Consolas', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 12px;
   border-radius: 3px;
-  font-size: 11px;
-}
-
-/* Permanent info bar: time + fps */
-.video-info-bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 14px;
-  background: linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 100%);
+  line-height: 1.5;
+  letter-spacing: 0.3px;
   pointer-events: none;
   z-index: 2;
 }
-.info-time {
-  font-size: 13px;
-  font-weight: 600;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.6);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.5px;
-}
-.info-fps {
-  font-size: 12px;
-  font-weight: 500;
-  color: rgba(255,255,255,0.8);
-  background: rgba(0,0,0,0.4);
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-variant-numeric: tabular-nums;
+.ts-sep {
+  color: rgba(255, 255, 255, 0.3);
 }
 </style>

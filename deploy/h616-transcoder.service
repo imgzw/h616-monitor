@@ -1,0 +1,24 @@
+[Unit]
+Description=H616 H.264 Transcoder (MJPEG -> H.264 via fifo)
+After=go2rtc.service
+Requires=go2rtc.service
+
+[Service]
+Type=simple
+User=imgzw
+ExecStartPre=/bin/bash -c 'rm -f /tmp/camera_h264.fifo && mkfifo /tmp/camera_h264.fifo && chmod 666 /tmp/camera_h264.fifo'
+ExecStartPre=/bin/sleep 3
+ExecStart=/usr/bin/ffmpeg -y \
+    -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 5 \
+    -i http://127.0.0.1:1984/api/stream.mjpeg?src=camera \
+    -c:v libx264 -preset ultrafast -tune zerolatency -g 30 -b:v 800k -an \
+    -f h264 /tmp/camera_h264.fifo
+
+Restart=always
+RestartSec=5
+
+MemoryMax=128M
+CPUQuota=40%
+
+[Install]
+WantedBy=multi-user.target
