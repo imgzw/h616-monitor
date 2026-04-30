@@ -5,7 +5,6 @@
       :src="mjpegUrl"
       class="video-element"
       @load="onMjpegFirstFrame"
-      @progress="bumpFrame"
       @error="onMjpegError"
     />
     <video
@@ -67,11 +66,15 @@ function updateClock() {
   currentTime.value = `${y}-${mo}-${d} ${h}:${mi}:${s}`
 }
 
-// --- FPS ---
+// --- FPS (canvas-based frame detection for MJPEG) ---
 const fpsText = ref('')
 let frameCount = 0
 let fpsTimer: ReturnType<typeof setInterval> | null = null
 let rvfcId: number | null = null
+let fpsRafId: number | null = null
+let lastPixel = ''
+let fpsCanvas: HTMLCanvasElement | null = null
+let fpsCtx: CanvasRenderingContext2D | null = null
 
 function resetFpsCounter() {
   frameCount = 0
@@ -87,6 +90,41 @@ function startFpsPolling() {
 
 function bumpFrame() {
   frameCount++
+}
+
+function startMjpegFps() {
+  fpsCanvas = document.createElement('canvas')
+  fpsCanvas.width = 1
+  fpsCanvas.height = 1
+  fpsCtx = fpsCanvas.getContext('2d')
+  lastPixel = ''
+
+  function check() {
+    const img = containerRef.value?.querySelector('img')
+    if (!img || !fpsCtx || mode.value !== 'mjpeg') {
+      fpsRafId = requestAnimationFrame(check)
+      return
+    }
+    try {
+      fpsCtx.drawImage(img, img.naturalWidth / 2 | 0, img.naturalHeight / 2 | 0, 1, 1, 0, 0, 1, 1)
+      const pixel = fpsCanvas!.toDataURL()
+      if (pixel !== lastPixel && lastPixel !== '') {
+        bumpFrame()
+      }
+      lastPixel = pixel
+    } catch { /* cross-origin or not yet loaded */ }
+    fpsRafId = requestAnimationFrame(check)
+  }
+  fpsRafId = requestAnimationFrame(check)
+}
+
+function stopMjpegFps() {
+  if (fpsRafId !== null) {
+    cancelAnimationFrame(fpsRafId)
+    fpsRafId = null
+  }
+  fpsCanvas = null
+  fpsCtx = null
 }
 
 function startRvfc() {
@@ -200,6 +238,7 @@ function connectMjpeg() {
   modeInfo.value = 'MJPEG 直出模式'
   connecting.value = false
   connected.value = false
+  startMjpegFps()
 }
 
 function onMjpegFirstFrame() {
@@ -207,7 +246,6 @@ function onMjpegFirstFrame() {
     connected.value = true
     resolution.value = '1280x720'
   }
-  bumpFrame()
 }
 
 function onMjpegError() {
@@ -226,6 +264,7 @@ function scheduleReconnect() {
 
 function disconnect() {
   stopRvfc()
+  stopMjpegFps()
   if (reconnectTimer) {
     clearTimeout(reconnectTimer)
     reconnectTimer = null
