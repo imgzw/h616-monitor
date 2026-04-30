@@ -2,25 +2,15 @@
   <div class="live-view">
     <div class="live-main">
       <div class="video-wrapper">
-        <VideoPlayer ref="playerRef" :stream-name="streamName" :low-bandwidth="lowBandwidth" />
+        <VideoPlayer ref="playerRef" stream-name="camera" :low-bandwidth="true" />
       </div>
       <div class="live-sidebar">
         <ZoomControl />
         <div class="control-panel">
-          <div class="panel-title">画质模式</div>
-          <div class="bandwidth-toggle">
-            <el-switch
-              v-model="lowBandwidth"
-              active-text="直出"
-              inactive-text="H.264"
-              @change="onBandwidthChange"
-            />
-            <div v-if="lowBandwidth" class="encoder-info">
-              <span class="sw-badge">MJPEG 零转码</span>
-            </div>
-            <div v-else class="encoder-info">
-              <span class="hw-badge">WebRTC 低延迟</span>
-            </div>
+          <div class="panel-title">视频源</div>
+          <div class="stream-info">
+            <span class="sw-badge">MJPEG 直出</span>
+            <span class="stream-detail">1280x720 · 15fps</span>
           </div>
         </div>
         <div class="control-panel">
@@ -88,7 +78,6 @@ import { startRecording, stopRecording, type SystemStatus } from '../api'
 import { formatSize, formatUptime, formatTime, diskColor } from '../utils/format'
 
 const playerRef = ref()
-const streamName = ref('camera_h264')
 const lowBandwidth = ref(true)
 
 const status = inject<SystemStatus>('systemStatus')!
@@ -120,10 +109,6 @@ async function handleStop() {
   } catch {
     ElMessage.error('停止录制失败')
   }
-}
-
-function onBandwidthChange(val: boolean) {
-  lowBandwidth.value = val
 }
 
 const diskColorVal = computed(() => diskColor(status.storage?.usage_percent ?? 0))
@@ -178,6 +163,15 @@ const diskColorVal = computed(() => diskColor(status.storage?.usage_percent ?? 0
 .encoder-info {
   font-size: 11px;
   white-space: nowrap;
+}
+.stream-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stream-detail {
+  font-size: 11px;
+  color: var(--text-tertiary);
 }
 .hw-badge {
   background: rgba(63, 185, 80, 0.12);

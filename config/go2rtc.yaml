@@ -1,8 +1,6 @@
 streams:
   camera:
     - v4l2:device?video=/dev/video1&input_format=mjpeg&video_size=1280x720&framerate=15
-  camera_h264:
-    - exec:ffmpeg -y -reconnect 1 -reconnect_at_eof 1 -reconnect_streamed 1 -reconnect_delay_max 5 -i http://127.0.0.1:1984/api/stream.mjpeg?src=camera -c:v libx264 -preset ultrafast -tune zerolatency -g 30 -b:v 800k -an -f h264 pipe:1#video=h264
 
 api:
   listen: ":1984"
