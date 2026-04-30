@@ -7,14 +7,14 @@ class Settings(BaseSettings):
     port: int = 8000
 
     camera_device: str = "/dev/video1"
-    camera_name: str = "camera_h264"
-    recording_stream_name: str = "camera_h264"
-    recording_stream_format: str = "ts"
+    camera_name: str = "camera"
+    recording_stream_name: str = "camera"
+    recording_stream_format: str = "mjpeg"
 
     recordings_dir: Path = Path("/opt/h616-monitor/recordings")
     segment_duration: int = 300
     recording_format: str = "mp4"
-    recording_video_codec: str = "copy"
+    recording_video_codec: str = "libx264"
     recording_preset: str = "ultrafast"
     recording_crf: int = 23
 
